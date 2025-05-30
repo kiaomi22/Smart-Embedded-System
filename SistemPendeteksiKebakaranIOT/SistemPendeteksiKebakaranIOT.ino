@@ -11,48 +11,52 @@
 
 #define BLYNK_PRINT Serial
 
-#define DHTPIN 2
-#define DHTTYPE DHT22
+// === Konfigurasi Pin ===
+#define DHTPIN D5
+#define DHTTYPE DHT11
+#define ledMerah D2
+#define ledHijau D1
+#define BuzzerPin D3
+#define servoPin D4
 
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 
-const int ledMerah = 5;
-const int ledHijau = 19;
-const int servoPin = 18;
-const int BuzzerPin = 4;
-
-Servo myservo;       // Deklarasi objek servo
+// === Objek dan Variabel ===
 DHT dht(DHTPIN, DHTTYPE);
+Servo myservo;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+WidgetLCD lcd1(V2);
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // Alamat I2C LCD dan ukuran karakter
-WidgetLCD lcd1(V2);  // Widget LCD Blynk
+const float suhuAmbang = 40.0;
+unsigned long lastUpdate = 0;
+const unsigned long interval = 2000;
 
-BLYNK_WRITE(V3) {  // Mendapatkan nilai dari button switch di Blynk
+BLYNK_WRITE(V3) {
   int switchValue = param.asInt();
   if (switchValue == 1) {
     digitalWrite(ledMerah, HIGH);
     digitalWrite(ledHijau, LOW);
     tone(BuzzerPin, 250);
-    myservo.write(180); 
+    myservo.write(180);
     lcd1.clear();
-    lcd1.print(0,0, "Ada Api Berbahaya!!");
-    Blynk.logEvent("kebakaran","Ada Api Berbahaya!!!");
+    lcd1.print(0, 0, "Ada Api Berbahaya!!");
+    Blynk.logEvent("kebakaran", "Ada Api Berbahaya!!!");
   } else {
     digitalWrite(ledMerah, LOW);
     digitalWrite(ledHijau, HIGH);
     noTone(BuzzerPin);
-    myservo.write(0); 
+    myservo.write(0);
     lcd1.clear();
-    lcd1.print(0,0, "Aman Dari Api");
+    lcd1.print(0, 0, "Aman Dari Api");
   }
 }
 
 void setup() {
   Serial.begin(9600);
   lcd.init();
-  lcd.backlight(); // Inisialisasi LCD
-  lcd.print("Sensor DHT22");
+  lcd.backlight();
+  lcd.print("Sensor DHT11");
   lcd.setCursor(0, 1);
   lcd.print("Membaca nilai...");
 
@@ -60,19 +64,33 @@ void setup() {
   pinMode(ledHijau, OUTPUT);
   pinMode(BuzzerPin, OUTPUT);
 
-  dht.begin(); // Inisialisasi sensor DHT22
-  myservo.attach(servoPin); // Menghubungkan servo ke pin 18
-  myservo.write(0); // Menggerakkan servo ke posisi awal
+  dht.begin();
+  myservo.attach(servoPin);
+  myservo.write(0);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
 }
 
 void loop() {
   Blynk.run();
-  float temperature = dht.readTemperature(); // Baca suhu dalam derajat Celsius
-  float humidity = dht.readHumidity(); // Baca kelembaban dalam persen
+  unsigned long now = millis();
 
-  lcd.clear(); // Bersihkan tampilan LCD
+  if (now - lastUpdate >= interval) {
+    lastUpdate = now;
+    bacaSensorDanTindak();
+  }
+}
+
+void bacaSensorDanTindak() {
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("Gagal membaca sensor DHT11");
+    return;
+  }
+
+  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Suhu: ");
   lcd.print(temperature);
@@ -83,25 +101,24 @@ void loop() {
   lcd.print(humidity);
   lcd.print(" %");
 
-  if (temperature > 40) {
+  if (temperature > suhuAmbang) {
     digitalWrite(ledMerah, HIGH);
     digitalWrite(ledHijau, LOW);
     tone(BuzzerPin, 250);
-    myservo.write(180); 
+    myservo.write(180);
     lcd1.clear();
-    lcd1.print(0,0, "Ada Api Berbahaya!!");
-    Blynk.logEvent("kebakaran","Ada Api Berbahaya!!!");
+    lcd1.print(0, 0, "Ada Api Berbahaya!!");
+    Blynk.logEvent("kebakaran", "Ada Api Berbahaya!!!");
   } else {
     digitalWrite(ledMerah, LOW);
     digitalWrite(ledHijau, HIGH);
     noTone(BuzzerPin);
-    myservo.write(0); 
+    myservo.write(0);
     lcd1.clear();
-    lcd1.print(0,0, "Aman Dari Api");
+    lcd1.print(0, 0, "Aman Dari Api");
   }
 
-  Blynk.virtualWrite(V1, temperature); 
+  Blynk.virtualWrite(V1, temperature);
   Blynk.virtualWrite(V0, humidity);
-
-  delay(2000);
 }
+
